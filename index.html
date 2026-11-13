@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LA 2026 Trip Split</title>
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LA Split">
+<meta name="theme-color" content="#2A1638">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/12.15.0/firebase-firestore-compat.min.js"></script>
+<style>
+  :root{
+    --night:#2A1638;
+    --night-2:#3B2150;
+    --haze:#FDF3F6;
+    --haze-2:#F8E1E9;
+    --card:#FFFFFF;
+    --ink:#2A1638;
+    --muted:#6E5A72;
+    --line:rgba(42,22,56,0.14);
+    --pink:#E0457B;
+    --pink-dark:#B02A5B;
+    --gold:#F7A928;
+    --pool:#0C7C86;
+    --pool-dark:#075A63;
+    --display:'Bricolage Grotesque','Figtree',system-ui,sans-serif;
+    --body:'Figtree',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{margin:0;background:var(--haze);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;}
+  button,input,select{font-family:inherit;color:inherit;}
+  button{cursor:pointer;}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+  .num{font-variant-numeric:tabular-nums;}
+  .app{max-width:680px;margin:0 auto;min-height:100vh;padding-bottom:calc(3rem + env(safe-area-inset-bottom));}
+
+  /* Header: the sun going down over the title is the one loud thing */
+  .header{
+    position:relative;overflow:hidden;
+    background:var(--night);color:#fff;
+    padding:calc(1.6rem + env(safe-area-inset-top)) 1.25rem 1.5rem;
+  }
+  .header::before{
+    content:"";position:absolute;right:-46px;top:calc(-58px + env(safe-area-inset-top));
+    width:176px;height:176px;border-radius:50%;
+    background:linear-gradient(180deg,var(--gold) 0%,#F0683C 55%,var(--pink) 100%);
+  }
+  .header::after{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:6px;
+    background:linear-gradient(90deg,var(--gold),#F0683C,var(--pink));
+  }
+  .header > *{position:relative;}
+  .trip-kind{margin:0 0 2px;font-size:14px;font-weight:600;color:var(--gold);}
+  .trip-title{
+    margin:0 0 16px;font-family:var(--display);font-weight:800;
+    font-size:46px;line-height:1;letter-spacing:-0.02em;
+  }
+  .traveler-row{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{
+    font-size:13px;font-weight:500;padding:4px 11px;border-radius:999px;
+    background:var(--night-2);border:1px solid rgba(255,255,255,0.3);
+  }
+  .chip.me{background:var(--gold);border-color:var(--gold);color:var(--night);font-weight:700;}
+  .whoami{margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.85);min-height:20px;}
+  .whoami button{
+    background:none;border:none;color:#fff;text-decoration:underline;
+    font-size:13px;padding:6px 4px;margin-left:4px;
+  }
+
+  .banner{
+    display:none;margin:14px 1.25rem 0;padding:12px 14px;border-radius:10px;
+    background:#FFF3D6;border:1px solid var(--gold);color:#4A3200;font-size:14px;
+  }
+  .banner.show{display:block;}
+
+  .summary{display:flex;gap:10px;padding:14px 1.25rem 0;}
+  .summary-card{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;}
+  .summary-label{margin:0 0 2px;font-size:12.5px;color:var(--muted);}
+  .summary-value{margin:0;font-family:var(--display);font-weight:700;font-size:19px;color:var(--ink);}
+
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);margin:1.1rem 1.25rem 0;border-bottom:1px solid var(--line);}
+  .tab-btn{
+    font-family:var(--display);font-weight:500;font-size:15px;
+    min-height:44px;padding:8px 2px;background:none;border:none;
+    border-bottom:3px solid transparent;margin-bottom:-1px;color:var(--muted);
+  }
+  .tab-btn.active{color:var(--ink);font-weight:700;border-bottom-color:var(--pink);}
+
+  .panel{padding:1.1rem 1.25rem 0;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem;}
+  .form-title{margin:0 0 12px;font-family:var(--display);font-weight:700;font-size:18px;}
+  .field{margin-bottom:14px;}
+  .field > label, .field > .label{display:block;font-size:13.5px;font-weight:600;margin-bottom:6px;}
+  .field input[type="text"], .field input[type="number"], .field select{
+    width:100%;min-height:44px;padding:9px 11px;font-size:16px;
+    border:1px solid var(--line);border-radius:9px;background:var(--haze);
+  }
+  .field input:focus, .field select:focus{outline:none;border-color:var(--pink);box-shadow:0 0 0 3px rgba(224,69,123,0.18);}
+  .money{position:relative;}
+  .money span{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:600;color:var(--muted);}
+  .money input{padding-left:26px !important;}
+
+  .pill-grid{display:flex;flex-wrap:wrap;gap:8px;}
+  .pill{
+    min-height:38px;padding:6px 14px;border-radius:999px;font-size:14.5px;font-weight:500;
+    border:1px solid var(--line);background:var(--haze);color:var(--muted);
+  }
+  .pill[aria-pressed="true"]{background:var(--night);border-color:var(--night);color:#fff;}
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+  .seg button{
+    min-height:42px;border-radius:9px;font-size:14.5px;font-weight:600;
+    border:1px solid var(--line);background:var(--haze);color:var(--muted);
+  }
+  .seg button[aria-pressed="true"]{background:var(--night);border-color:var(--night);color:#fff;}
+  .custom-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;}
+  .custom-row label{font-size:14.5px;margin:0;font-weight:500;}
+  .custom-row input{width:120px !important;text-align:right;background:#fff !important;}
+  .custom-total{margin:8px 0 0;font-size:13.5px;font-weight:600;}
+  .custom-total.ok{color:var(--pool-dark);}
+  .custom-total.off{color:var(--pink-dark);}
+
+  .row-actions{display:flex;gap:8px;margin-top:4px;}
+  .btn{
+    min-height:46px;padding:10px 18px;border-radius:10px;
+    font-family:var(--display);font-weight:700;font-size:15.5px;
+    border:1px solid var(--pool-dark);background:var(--pool);color:#fff;
+  }
+  .btn.primary{flex:1;}
+  .btn.quiet{background:transparent;border-color:var(--line);color:var(--ink);font-weight:500;}
+  .hint{margin:10px 0 0;font-size:13px;color:var(--muted);}
+  .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);}
+
+  /* Ledger */
+  .entry{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px 6px;margin-bottom:10px;}
+  .entry-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
+  .entry-date{margin:0 0 2px;font-size:12.5px;color:var(--muted);}
+  .entry-desc{margin:0 0 6px;font-family:var(--display);font-weight:700;font-size:17px;line-height:1.2;overflow-wrap:anywhere;}
+  .entry-amt{text-align:right;flex-shrink:0;}
+  .entry-amt .amt{display:block;font-family:var(--display);font-weight:700;font-size:18px;color:var(--pool-dark);}
+  .entry-amt .each{display:block;font-size:12.5px;color:var(--muted);}
+  .entry-line{margin:0 0 2px;font-size:14px;}
+  .entry-line .names{color:var(--pink-dark);font-weight:600;}
+  .entry-actions{display:flex;align-items:center;gap:4px;margin-top:6px;border-top:1px solid var(--line);padding-top:2px;}
+  .entry-actions .ask{font-size:13.5px;font-weight:600;margin-right:auto;}
+  .link-btn{background:none;border:none;min-height:40px;padding:6px 10px 6px 0;font-size:14px;font-weight:600;color:var(--pool-dark);text-decoration:underline;}
+  .link-btn.danger{color:var(--pink-dark);}
+
+  /* Settle up */
+  .section-title{margin:22px 0 10px;font-family:var(--display);font-weight:700;font-size:16px;}
+  .section-title:first-child{margin-top:0;}
+  .debt-group{background:var(--night);border-radius:12px;margin-bottom:8px;overflow:hidden;}
+  .debt-summary{
+    display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:10px 12px 10px 14px;
+    color:#fff;list-style:none;cursor:pointer;font-weight:600;font-size:15px;
+  }
+  .debt-summary::-webkit-details-marker{display:none;}
+  .debt-summary .arrow{color:var(--gold);}
+  .debt-summary .due{margin-left:auto;font-family:var(--display);font-weight:700;font-size:17px;color:var(--gold);}
+  .debt-summary .count{flex-basis:100%;order:5;font-size:12.5px;font-weight:400;color:rgba(255,255,255,0.75);}
+  .pay-btn{
+    min-height:36px;padding:6px 12px;border-radius:999px;border:none;
+    background:var(--gold);color:var(--night);font-size:13px;font-weight:700;
+  }
+  .pay-btn.small{background:var(--pool);color:#fff;}
+  .debt-items{background:var(--haze-2);padding:2px 14px;}
+  .debt-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);}
+  .debt-item:last-child{border-bottom:none;}
+  .debt-item .what{min-width:0;margin-right:auto;}
+  .debt-item .desc{display:block;font-size:14.5px;font-weight:600;overflow-wrap:anywhere;}
+  .debt-item .date{display:block;font-size:12.5px;color:var(--muted);}
+  .debt-item .amt{font-weight:700;color:var(--pool-dark);}
+  .debt-item.paid .desc, .debt-item.paid .amt{text-decoration:line-through;color:var(--muted);}
+  .history-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;font-size:14px;
+  }
+  .history-row .detail{display:block;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere;}
+  .settled-msg{text-align:center;padding:1.5rem 1rem;font-family:var(--display);font-weight:700;font-size:17px;color:var(--pool-dark);}
+  .rows{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:2px 14px;}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
+  .row:last-child{border-bottom:none;}
+  .row .pos{color:var(--pool-dark);font-weight:600;}
+  .row .neg{color:var(--pink-dark);font-weight:600;}
+  .row .zero{color:var(--muted);}
+
+
+  .profile-gate{
+    position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    padding:1.5rem;background:rgba(42,22,56,0.6);
+  }
+  .profile-gate.show{display:flex;}
+  .profile-card{background:var(--haze);border-radius:16px;padding:1.5rem;max-width:340px;width:100%;text-align:center;}
+  .profile-title{margin:0 0 4px;font-family:var(--display);font-weight:800;font-size:24px;}
+  .profile-sub{margin:0 0 16px;font-size:14px;color:var(--muted);}
+  .profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .profile-option{
+    min-height:48px;border-radius:10px;border:1px solid var(--line);background:#fff;
+    font-family:var(--display);font-weight:700;font-size:16px;
+  }
+  .profile-option:hover{border-color:var(--pink);}
+
+  .toast{
+    position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    max-width:calc(100vw - 2rem);background:var(--night);color:#fff;padding:10px 16px;border-radius:10px;
+    font-size:14px;font-weight:500;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60;
+  }
+  .toast.show{opacity:1;}
+  @media (max-width:360px){
+    .trip-title{font-size:40px;}
+    .tab-btn{font-size:14px;}
+    .summary-value{font-size:17px;}
+  }
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none;} }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <p class="trip-kind">Birthday trip ledger</p>
+    <h1 class="trip-title">LA 2026</h1>
+    <div class="traveler-row" id="travelerRow"></div>
+    <p class="whoami" id="whoami"></p>
+  </header>
+
+  <div class="banner" id="banner" role="alert"></div>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="add" role="tab" aria-selected="true">Add</button>
+    <button class="tab-btn" data-tab="ledger" role="tab" aria-selected="false">Ledger</button>
+    <button class="tab-btn" data-tab="settle" role="tab" aria-selected="false">Settle up</button>
+  </div>
+
+  <section class="panel" id="panel-add">
+    <div class="card">
+      <h2 class="form-title" id="formTitle">Add an expense</h2>
+      <div class="field">
+        <label for="desc">What was it</label>
+        <input type="text" id="desc" placeholder="Uber to the hotel" autocomplete="off" maxlength="80">
+      </div>
+      <div class="field">
+        <label for="amount">Total amount</label>
+        <div class="money"><span>$</span><input type="number" id="amount" placeholder="60.00" step="0.01" min="0" inputmode="decimal"></div>
+      </div>
+      <div class="field">
+        <label for="paidBy">Who paid</label>
+        <select id="paidBy"></select>
+      </div>
+      <div class="field">
+        <span class="label">Who it's for</span>
+        <div class="pill-grid" id="affectsGrid"></div>
+      </div>
+      <div class="field">
+        <span class="label">How to split it</span>
+        <div class="seg">
+          <button type="button" id="evenBtn" aria-pressed="true">Split evenly</button>
+          <button type="button" id="customBtn" aria-pressed="false">Custom amounts</button>
+        </div>
+        <div id="customBox" hidden></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn primary" id="saveBtn">Add to ledger</button>
+        <button class="btn quiet" id="clearBtn">Clear</button>
+      </div>
+      <p class="hint" id="splitHint"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-ledger" hidden><div id="ledgerList"></div></section>
+
+  <section class="panel" id="panel-settle" hidden>
+    <div id="settleList"></div>
+    <div id="balanceList"></div>
+  </section>
+
+  <div class="profile-gate" id="profileGate">
+    <div class="profile-card">
+      <p class="profile-title">Who are you?</p>
+      <p class="profile-sub">Pick your name so new expenses default to you.</p>
+      <div class="profile-grid" id="profileGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ---------- Trip setup ----------
+const NAMES = ["Kayla","Aya","Eve","Elias","Marian","Tia"];
+const TRIP_ID = "la-2026";              // its own folder in the database, separate from London
+const PROFILE_KEY = "la-2026-profile";  // separate from the London app's saved name
+
+// Same Firebase project as the London app. These values are safe to be public;
+// the Firestore rules decide who can read and write.
+const firebaseConfig = {
+  apiKey: "AIzaSyA_onkMJZyNk3ABVC-kyQjxH6SaaHOmv4o",
+  authDomain: "london-2026-68de3.firebaseapp.com",
+  projectId: "london-2026-68de3",
+  storageBucket: "london-2026-68de3.firebasestorage.app",
+  messagingSenderId: "937859154617",
+  appId: "1:937859154617:web:56276f23243f102af75168",
+  measurementId: "G-DJNYX7RXRK"
+};
+
+// ---------- State ----------
+let expenses = [];
+let settlements = [];
+let loaded = false;
+let myName = null;
+let splitMode = 'even';
+let customValues = {};          // only what someone actually typed
+let selected = new Set(NAMES);
+let editingId = null;
+let pendingDelete = null;
+const openGroups = new Set();
+let db = null, expensesRef = null, settlementsRef = null;
+
+const $ = id => document.getElementById(id);
+
+// ---------- Helpers ----------
+let toastTimer = null;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function showBanner(msg){ const b = $('banner'); b.textContent = msg; b.classList.add('show'); }
+function hideBanner(){ $('banner').classList.remove('show'); }
+
+function fmt(n){
+  return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtDate(ts){
+  return new Date(ts).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+function toCents(v){ return Math.round(parseFloat(v) * 100); }
+function evenCents(cents, n){
+  const base = Math.floor(cents / n), extra = cents - base * n;
+  return Array.from({length:n}, (_, i) => base + (i < extra ? 1 : 0));
+}
+function writeFailed(err){
+  toast(err && err.code === 'permission-denied'
+    ? 'Not saved: the shared ledger is locked'
+    : 'Not saved: check your connection and try again');
+}
+
+// ---------- Money maths ----------
+function getShare(e, person){
+  if(!e.splitAmong.includes(person)) return 0;
+  if(e.splitType === 'custom' && e.splitAmounts) return Number(e.splitAmounts[person]) || 0;
+  return e.amount / e.splitAmong.length;
+}
+// Every debt traced to the expense it came from. Nothing is netted across the group.
+function buildDebtItems(){
+  const items = [];
+  expenses.forEach(e => {
+    e.splitAmong.forEach(p => {
+      const amount = getShare(e, p);
+      if(p !== e.paidBy && amount > 0.005){
+        items.push({ itemId: e.id + '__' + p, expenseId: e.id, desc: e.desc, from: p, to: e.paidBy, amount, ts: e.ts });
+      }
+    });
+  });
+  return items;
+}
+function paidSet(){ return new Set(settlements.map(s => s.id)); }
+// A fingerprint of who owes what; if it changes on edit, paid marks no longer apply.
+function sharesKey(e){
+  return e.paidBy + '|' + NAMES.filter(n => e.splitAmong.includes(n)).map(n => n + ':' + getShare(e, n).toFixed(2)).join(',');
+}
+
+// ---------- Profile ----------
+function readProfile(){
+  try{ return localStorage.getItem(PROFILE_KEY); }catch(e){ return null; }
+}
+function loadProfile(){
+  const saved = readProfile();
+  myName = NAMES.includes(saved) ? saved : null;
+  if(!myName) $('profileGate').classList.add('show');
+  renderIdentity();
+}
+function chooseProfile(name){
+  myName = name;
+  try{ localStorage.setItem(PROFILE_KEY, name); }catch(e){ /* still works for this visit */ }
+  $('profileGate').classList.remove('show');
+  if(!editingId) $('paidBy').value = name;
+  renderIdentity();
+  render();
+}
+function renderIdentity(){
+  $('travelerRow').innerHTML = NAMES.map(n => `<span class="chip${n === myName ? ' me' : ''}">${n}</span>`).join('');
+  $('whoami').innerHTML = myName
+    ? `You're signed in as ${myName}. <button type="button" data-action="switch-profile">Switch</button>`
+    : '';
+}
+
+// ---------- Form ----------
+function initForm(){
+  $('paidBy').innerHTML = NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
+  $('profileGrid').innerHTML = NAMES.map(n => `<button type="button" class="profile-option" data-action="choose-profile" data-name="${n}">${n}</button>`).join('');
+  $('evenBtn').addEventListener('click', () => setSplitMode('even'));
+  $('customBtn').addEventListener('click', () => setSplitMode('custom'));
+  $('amount').addEventListener('input', renderCustomBox);
+  $('saveBtn').addEventListener('click', saveExpense);
+  $('clearBtn').addEventListener('click', resetForm);
+  $('customBox').addEventListener('input', e => {
+    if(e.target.matches('input[data-name]')){
+      customValues[e.target.dataset.name] = e.target.value;
+      updateCustomTotal();
+    }
+  });
+  renderPills();
+  setSplitMode('even');
+}
+function renderPills(){
+  $('affectsGrid').innerHTML = NAMES.map(n =>
+    `<button type="button" class="pill" data-action="toggle-person" data-name="${n}" aria-pressed="${selected.has(n)}">${n}</button>`
+  ).join('');
+}
+function selectedNames(){ return NAMES.filter(n => selected.has(n)); }
+function setSplitMode(mode){
+  splitMode = mode;
+  $('evenBtn').setAttribute('aria-pressed', mode === 'even');
+  $('customBtn').setAttribute('aria-pressed', mode === 'custom');
+  $('customBox').hidden = mode !== 'custom';
+  $('splitHint').textContent = mode === 'even'
+    ? "Splits evenly across everyone selected. Deselect anyone it wasn't for."
+    : "Enter what each person owes, for when orders weren't the same price.";
+  renderCustomBox();
+}
+function effectiveCustom(){
+  const who = selectedNames();
+  const cents = toCents($('amount').value) || 0;
+  const even = who.length ? evenCents(Math.max(cents, 0), who.length) : [];
+  const out = {};
+  who.forEach((n, i) => {
+    out[n] = customValues[n] !== undefined ? customValues[n] : (cents > 0 ? (even[i] / 100).toFixed(2) : '');
+  });
+  return out;
+}
+function renderCustomBox(){
+  if(splitMode !== 'custom') return;
+  const who = selectedNames();
+  const box = $('customBox');
+  if(who.length === 0){
+    box.innerHTML = `<p class="hint">Select who it's for first.</p>`;
+    return;
+  }
+  const vals = effectiveCustom();
+  box.innerHTML = who.map(n => `
+    <div class="custom-row">
+      <label for="custom-${n}">${n}</label>
+      <div class="money"><span>$</span><input type="number" id="custom-${n}" data-name="${n}" step="0.01" min="0" inputmode="decimal" value="${escapeHtml(vals[n])}"></div>
+    </div>`).join('') + `<p class="custom-total" id="customTotal"></p>`;
+  updateCustomTotal();
+}
+function updateCustomTotal(){
+  const el = $('customTotal');
+  if(!el) return;
+  const cents = toCents($('amount').value) || 0;
+  const vals = effectiveCustom();
+  const sum = Object.values(vals).reduce((s, v) => s + (toCents(v) || 0), 0);
+  const diff = cents - sum;
+  if(diff === 0){
+    el.className = 'custom-total ok';
+    el.textContent = `${fmt(sum / 100)} of ${fmt(cents / 100)} assigned. All set.`;
+  } else {
+    el.className = 'custom-total off';
+    el.textContent = diff > 0
+      ? `${fmt(diff / 100)} still to assign.`
+      : `${fmt(-diff / 100)} over the total.`;
+  }
+}
+function resetForm(){
+  editingId = null;
+  customValues = {};
+  selected = new Set(NAMES);
+  $('desc').value = '';
+  $('amount').value = '';
+  $('paidBy').value = myName || NAMES[0];
+  $('formTitle').textContent = 'Add an expense';
+  $('saveBtn').textContent = 'Add to ledger';
+  $('clearBtn').textContent = 'Clear';
+  renderPills();
+  setSplitMode('even');
+}
+function startEdit(id){
+  const e = expenses.find(x => x.id === id);
+  if(!e) return;
+  editingId = id;
+  selected = new Set(e.splitAmong);
+  customValues = {};
+  if(e.splitType === 'custom' && e.splitAmounts){
+    e.splitAmong.forEach(n => { customValues[n] = (Number(e.splitAmounts[n]) || 0).toFixed(2); });
+  }
+  $('desc').value = e.desc;
+  $('amount').value = Number(e.amount).toFixed(2);
+  $('paidBy').value = e.paidBy;
+  $('formTitle').textContent = 'Edit expense';
+  $('saveBtn').textContent = 'Save changes';
+  $('clearBtn').textContent = 'Cancel';
+  renderPills();
+  setSplitMode(e.splitType === 'custom' ? 'custom' : 'even');
+  showTab('add');
+  window.scrollTo({top: $('panel-add').offsetTop - 60, behavior: 'auto'});
+}
+function saveExpense(){
+  if(!expensesRef){ toast("Not connected to the shared ledger yet"); return; }
+  const desc = $('desc').value.trim();
+  const cents = toCents($('amount').value);
+  const paidBy = $('paidBy').value;
+  const who = selectedNames();
+
+  if(!desc){ toast('Add a description'); return; }
+  if(!cents || cents <= 0){ toast('Add a valid amount'); return; }
+  if(who.length === 0){ toast("Select who it's for"); return; }
+
+  const data = { desc, amount: cents / 100, paidBy, splitAmong: who, splitType: splitMode };
+
+  if(splitMode === 'custom'){
+    const vals = effectiveCustom();
+    const splitAmounts = {};
+    let sum = 0;
+    for(const n of who){
+      const c = toCents(vals[n]);
+      if(isNaN(c) || c < 0){ toast(`Enter an amount for ${n}`); return; }
+      splitAmounts[n] = c / 100;
+      sum += c;
+    }
+    if(sum !== cents){ toast(`Amounts add up to ${fmt(sum / 100)}, not ${fmt(cents / 100)}`); return; }
+    data.splitAmounts = splitAmounts;
+  }
+
+  if(editingId){
+    const old = expenses.find(x => x.id === editingId);
+    if(!old){ toast('That expense was deleted by someone else'); resetForm(); return; }
+    data.ts = old.ts;
+    data.editedTs = Date.now();
+    const batch = db.batch();
+    batch.set(expensesRef.doc(editingId), data);
+    let cleared = 0;
+    if(sharesKey(old) !== sharesKey(data)){
+      const paid = paidSet();
+      NAMES.forEach(n => {
+        const sid = editingId + '__' + n;
+        if(paid.has(sid)){ batch.delete(settlementsRef.doc(sid)); cleared++; }
+      });
+    }
+    batch.commit().catch(writeFailed);
+    toast(cleared ? 'Changes saved. Paid marks on this expense were reset.' : 'Changes saved');
+  } else {
+    data.ts = Date.now();
+    expensesRef.add(data).catch(writeFailed);
+    toast('Added to ledger');
+  }
+  resetForm();
+}
+function deleteExpense(id){
+  if(!expensesRef) return;
+  const batch = db.batch();
+  batch.delete(expensesRef.doc(id));
+  const paid = paidSet();
+  NAMES.forEach(n => {
+    const sid = id + '__' + n;
+    if(paid.has(sid)) batch.delete(settlementsRef.doc(sid));
+  });
+  batch.commit().catch(writeFailed);
+  if(editingId === id) resetForm();
+  pendingDelete = null;
+  toast('Expense deleted');
+}
+
+// ---------- Settle up actions ----------
+function markItemPaid(itemId){
+  const it = buildDebtItems().find(i => i.itemId === itemId);
+  if(!it || !settlementsRef) return;
+  settlementsRef.doc(itemId).set({ from: it.from, to: it.to, amount: it.amount, ts: Date.now() }).catch(writeFailed);
+}
+function undoItemPaid(itemId){
+  if(!settlementsRef) return;
+  settlementsRef.doc(itemId).delete().catch(writeFailed);
+}
+function markGroupPaid(from, to){
+  if(!settlementsRef) return;
+  const paid = paidSet();
+  const unpaid = buildDebtItems().filter(it => it.from === from && it.to === to && !paid.has(it.itemId));
+  if(unpaid.length === 0) return;
+  const batch = db.batch();
+  unpaid.forEach(it => batch.set(settlementsRef.doc(it.itemId), { from: it.from, to: it.to, amount: it.amount, ts: Date.now() }));
+  batch.commit().catch(writeFailed);
+}
+
+// ---------- Rendering ----------
+function render(){
+  renderSummary();
+  renderLedger();
+  renderSettle();
+}
+function renderSummary(){
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  let third = `<div class="summary-card"><p class="summary-label">Expenses</p><p class="summary-value num">${expenses.length}</p></div>`;
+  if(myName){
+    const mine = expenses.reduce((s, e) => s + getShare(e, myName), 0);
+    third += `<div class="summary-card"><p class="summary-label">Your share</p><p class="summary-value num">${fmt(mine)}</p></div>`;
+  }
+  $('summary').innerHTML = `<div class="summary-card"><p class="summary-label">Total spent</p><p class="summary-value num">${fmt(total)}</p></div>` + third;
+}
+function emptyState(text){
+  return `<div class="empty">${loaded ? text : 'Loading the ledger…'}</div>`;
+}
+function renderLedger(){
+  const list = $('ledgerList');
+  if(expenses.length === 0){
+    list.innerHTML = emptyState('No expenses yet. Add the first one from the Add tab.');
+    return;
+  }
+  const sorted = [...expenses].sort((a, b) => b.ts - a.ts);
+  list.innerHTML = sorted.map(e => {
+    const isCustom = e.splitType === 'custom' && e.splitAmounts;
+    const splitLine = isCustom
+      ? e.splitAmong.map(n => `${n} ${fmt(getShare(e, n))}`).join(', ')
+      : e.splitAmong.join(', ');
+    const each = isCustom ? 'custom split' : `${fmt(e.amount / e.splitAmong.length)} each`;
+    const actions = pendingDelete === e.id
+      ? `<span class="ask">Delete this for everyone?</span>
+         <button type="button" class="link-btn danger" data-action="confirm-delete" data-id="${e.id}">Delete</button>
+         <button type="button" class="link-btn" data-action="cancel-delete">Keep</button>`
+      : `<button type="button" class="link-btn" data-action="edit" data-id="${e.id}">Edit</button>
+         <button type="button" class="link-btn danger" data-action="ask-delete" data-id="${e.id}">Delete</button>`;
+    return `
+      <article class="entry">
+        <div class="entry-top">
+          <div>
+            <p class="entry-date">${fmtDate(e.ts)}${e.editedTs ? ', edited' : ''}</p>
+            <h3 class="entry-desc">${escapeHtml(e.desc)}</h3>
+          </div>
+          <div class="entry-amt"><span class="amt num">${fmt(e.amount)}</span><span class="each num">${each}</span></div>
+        </div>
+        <p class="entry-line">${escapeHtml(e.paidBy)} paid</p>
+        <p class="entry-line">For <span class="names num">${escapeHtml(splitLine)}</span></p>
+        <div class="entry-actions">${actions}</div>
+      </article>`;
+  }).join('');
+}
+function renderSettle(){
+  const settleList = $('settleList');
+  const balanceList = $('balanceList');
+  if(expenses.length === 0){
+    settleList.innerHTML = emptyState('Nothing to settle yet.');
+    balanceList.innerHTML = '';
+    return;
+  }
+  const items = buildDebtItems();
+  const paid = paidSet();
+
+  const groups = new Map();
+  items.forEach(it => {
+    const key = it.from + '|' + it.to;
+    if(!groups.has(key)) groups.set(key, { key, from: it.from, to: it.to, items: [] });
+    groups.get(key).items.push(it);
+  });
+  const rank = g => (g.from === myName || g.to === myName ? 0 : 100) + NAMES.indexOf(g.from) * 10 + NAMES.indexOf(g.to);
+  const active = [...groups.values()]
+    .map(g => Object.assign(g, { unpaid: g.items.filter(it => !paid.has(it.itemId)) }))
+    .filter(g => g.unpaid.length > 0)
+    .sort((a, b) => rank(a) - rank(b));
+
+  let html = `<h2 class="section-title">Who owes who</h2>`;
+  if(active.length === 0){
+    html += `<div class="settled-msg">Everyone's square.</div>`;
+  } else {
+    html += active.map(g => {
+      const due = g.unpaid.reduce((s, it) => s + it.amount, 0);
+      const itemsHtml = g.items.slice().sort((a, b) => b.ts - a.ts).map(it => {
+        const isPaid = paid.has(it.itemId);
+        return `
+          <div class="debt-item${isPaid ? ' paid' : ''}">
+            <div class="what"><span class="desc">${escapeHtml(it.desc)}</span><span class="date">${fmtDate(it.ts)}</span></div>
+            <span class="amt num">${fmt(it.amount)}</span>
+            ${isPaid
+              ? `<button type="button" class="link-btn danger" data-action="undo-paid" data-id="${it.itemId}">Undo</button>`
+              : `<button type="button" class="pay-btn small" data-action="mark-paid" data-id="${it.itemId}">Mark paid</button>`}
+          </div>`;
+      }).join('');
+      return `
+        <details class="debt-group" data-key="${g.key}"${openGroups.has(g.key) ? ' open' : ''}>
+          <summary class="debt-summary">
+            <span>${g.from}</span><span class="arrow" aria-hidden="true">&#8594;</span><span>${g.to}</span>
+            <span class="due num">${fmt(due)}</span>
+            <button type="button" class="pay-btn" data-action="mark-group" data-from="${g.from}" data-to="${g.to}">Mark all paid</button>
+            <span class="count">${g.unpaid.length} unpaid ${g.unpaid.length === 1 ? 'item' : 'items'}. Tap to see ${g.unpaid.length === 1 ? 'it' : 'them'}.</span>
+          </summary>
+          <div class="debt-items">${itemsHtml}</div>
+        </details>`;
+    }).join('');
+  }
+
+  const paidItems = items.filter(it => paid.has(it.itemId));
+  if(paidItems.length > 0){
+    const when = id => { const s = settlements.find(x => x.id === id); return s ? s.ts : 0; };
+    html += `<h2 class="section-title">Payment history</h2>` + paidItems
+      .sort((a, b) => when(b.itemId) - when(a.itemId))
+      .map(it => `
+        <div class="history-row">
+          <span><span class="num">${it.from} paid ${it.to} ${fmt(it.amount)}</span><span class="detail">${escapeHtml(it.desc)}</span></span>
+          <button type="button" class="link-btn danger" data-action="undo-paid" data-id="${it.itemId}">Undo</button>
+        </div>`).join('');
+  }
+  settleList.innerHTML = html;
+
+  const net = {};
+  NAMES.forEach(n => net[n] = 0);
+  items.forEach(it => {
+    if(paid.has(it.itemId)) return;
+    net[it.to] += it.amount;
+    net[it.from] -= it.amount;
+  });
+  balanceList.innerHTML = `<h2 class="section-title">Still to settle</h2><div class="rows">` + NAMES.map(n => {
+    const v = net[n];
+    const label = Math.abs(v) < 0.005 ? `<span class="zero">all square</span>`
+      : v > 0 ? `<span class="pos num">is owed ${fmt(v)}</span>`
+      : `<span class="neg num">owes ${fmt(-v)}</span>`;
+    return `<div class="row"><span>${n}</span>${label}</div>`;
+  }).join('') + `</div>`;
+}
+// ---------- Tabs and clicks ----------
+function showTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on);
+  });
+  ['add','ledger','settle'].forEach(t => { $('panel-' + t).hidden = t !== name; });
+}
+document.addEventListener('click', e => {
+  const tab = e.target.closest('.tab-btn');
+  if(tab){ showTab(tab.dataset.tab); return; }
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const d = el.dataset;
+  switch(d.action){
+    case 'choose-profile': chooseProfile(d.name); break;
+    case 'switch-profile': $('profileGate').classList.add('show'); break;
+    case 'toggle-person':
+      if(selected.has(d.name)) selected.delete(d.name); else selected.add(d.name);
+      el.setAttribute('aria-pressed', selected.has(d.name));
+      renderCustomBox();
+      break;
+    case 'edit': startEdit(d.id); break;
+    case 'ask-delete': pendingDelete = d.id; renderLedger(); break;
+    case 'cancel-delete': pendingDelete = null; renderLedger(); break;
+    case 'confirm-delete': deleteExpense(d.id); break;
+    case 'mark-paid': markItemPaid(d.id); break;
+    case 'undo-paid': undoItemPaid(d.id); break;
+    case 'mark-group': e.preventDefault(); markGroupPaid(d.from, d.to); break;
+  }
+});
+// Remember which groups are open so they stay open when the list refreshes
+$('settleList').addEventListener('toggle', e => {
+  const key = e.target.dataset && e.target.dataset.key;
+  if(!key) return;
+  if(e.target.open) openGroups.add(key); else openGroups.delete(key);
+}, true);
+
+// ---------- Live sync ----------
+function onSyncError(err){
+  loaded = true;
+  render();
+  showBanner(err && err.code === 'permission-denied'
+    ? "The shared ledger is locked. The Firestore access rules have expired or don't allow this trip yet. Update the rules in the Firebase console, then reload."
+    : "Can't reach the shared ledger right now. Check your connection and reload.");
+}
+function connect(){
+  if(typeof firebase === 'undefined'){
+    loaded = true;
+    render();
+    showBanner("The sync library didn't load. Check your connection, turn off any ad blocker for this page, then reload.");
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+    const trip = db.collection('trips').doc(TRIP_ID);
+    expensesRef = trip.collection('expenses');
+    settlementsRef = trip.collection('settlements');
+    expensesRef.onSnapshot(snap => {
+      expenses = snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()))
+        .filter(e => e && Array.isArray(e.splitAmong) && e.splitAmong.length > 0 && typeof e.amount === 'number');
+      loaded = true;
+      hideBanner();
+      render();
+    }, onSyncError);
+    settlementsRef.onSnapshot(snap => {
+      settlements = snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
+      render();
+    }, onSyncError);
+  }catch(err){
+    onSyncError(err);
+  }
+}
+
+initForm();
+loadProfile();
+resetForm();
+render();
+connect();
+</script>
+</body>
+</html>
